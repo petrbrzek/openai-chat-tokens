@@ -1,182 +1,75 @@
-import OpenAI from "openai";
-import { promptTokensEstimate } from "../src";
+import OpenAI from 'openai'
+import { promptTokensEstimate } from '../src'
+import { type ChatCompletionCreateParamsBase } from 'openai/resources/chat/completions'
 
-// There's a bug in the openai types that prevents us from adding the name field to the system message
-// ref: https://github.com/openai/openai-openapi/issues/118
-// ref: https://github.com/openai/openai-node/pull/493
-// TODO: remove when this is fixed
-declare module "openai" {
-  namespace OpenAI.Chat {
-    interface ChatCompletionSystemMessageParam {
-      name?: string;
-    }
-  }
+type Message = OpenAI.Chat.ChatCompletionMessageParam
+type Functions = ChatCompletionCreateParamsBase['functions']
+type Tools = ChatCompletionCreateParamsBase['tools']
+
+type Example = {
+  messages: Message[]
+  functions?: Functions
+  tools?: Tools
+  tokens: number
+  validate?: boolean
 }
 
-type Message = OpenAI.Chat.ChatCompletionMessageParam;
-type Function = OpenAI.Chat.ChatCompletionCreateParams.Function;
-type FunctionCall = OpenAI.Chat.ChatCompletionFunctionCallOption;
-type Example = {
-  messages: Message[];
-  functions?: Function[];
-  function_call?: "none" | "auto" | FunctionCall;
-  tokens: number;
-  validate?: boolean;
-};
-
 const TEST_CASES: Example[] = [
-  // these match https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb
   {
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a helpful, pattern-following assistant that translates corporate jargon into plain English.",
-      },
-    ],
-    tokens: 25,
-  },
-  {
-    messages: [
-      {
-        role: "system",
-        name: "example_user",
-        content: "New synergies will help drive top-line growth.",
-      },
-    ],
-    tokens: 20,
-  },
-  {
-    messages: [
-      {
-        role: "system",
-        name: "example_assistant",
-        content: "Things working well together will increase revenue.",
-      },
-    ],
-    tokens: 19,
-  },
-  {
-    messages: [
-      {
-        role: "system",
-        name: "example_user",
-        content:
-          "Let's circle back when we have more bandwidth to touch base on opportunities for increased leverage.",
-      },
-    ],
-    tokens: 28,
-  },
-  {
-    messages: [
-      {
-        role: "system",
-        name: "example_assistant",
-        content:
-          "Let's talk later when we're less busy about how to do better.",
-      },
-    ],
-    tokens: 26,
-  },
-  {
-    messages: [
-      {
-        role: "user",
-        content:
-          "This late pivot means we don't have time to boil the ocean for the client deliverable.",
-      },
-    ],
-    tokens: 26,
-  },
-  // these are all random test cases below
-  {
-    messages: [{ role: "user", content: "hello" }],
+    messages: [{ role: 'user', content: 'hello' }],
     tokens: 8,
   },
   {
-    messages: [{ role: "user", content: "hello world" }],
+    messages: [{ role: 'user', content: 'hello world' }],
     tokens: 9,
   },
   {
-    messages: [{ role: "system", content: "hello" }],
+    messages: [{ role: 'system', content: 'hello' }],
     tokens: 8,
   },
   {
-    messages: [{ role: "system", content: "hello:" }],
+    messages: [{ role: 'system', content: 'hello:' }],
     tokens: 9,
   },
   {
     messages: [
-      { role: "system", content: "# Important: you're the best robot" },
-      { role: "user", content: "hello robot" },
-      { role: "assistant", content: "hello world" },
+      { role: 'system', content: "# Important: you're the best robot" },
+      { role: 'user', content: 'hello robot' },
+      { role: 'assistant', content: 'hello world' },
     ],
     tokens: 27,
   },
   {
-    messages: [{ role: "user", content: "hello" }],
+    messages: [{ role: 'user', content: 'hello' }],
     functions: [
       {
-        name: "foo",
-        parameters: { type: "object", properties: {} },
+        name: 'foo',
+        parameters: { type: 'object', properties: {} },
       },
     ],
     tokens: 31,
   },
   {
-    messages: [{ role: "user", content: "hello" }],
+    messages: [{ role: 'user', content: 'hello' }],
     functions: [
       {
-        name: "foo",
-        parameters: { type: "object", properties: {} },
-      },
-    ],
-    function_call: "none",
-    tokens: 32,
-  },
-  {
-    messages: [{ role: "user", content: "hello" }],
-    functions: [
-      {
-        name: "foo",
-        parameters: { type: "object", properties: {} },
-      },
-    ],
-    function_call: "auto",
-    tokens: 31,
-  },
-  {
-    messages: [{ role: "user", content: "hello" }],
-    functions: [
-      {
-        name: "foo",
-        parameters: { type: "object", properties: {} },
-      },
-    ],
-    function_call: { name: "foo" },
-    tokens: 36,
-  },
-  {
-    messages: [{ role: "user", content: "hello" }],
-    functions: [
-      {
-        name: "foo",
-        description: "Do a foo",
-        parameters: { type: "object", properties: {} },
+        name: 'foo',
+        description: 'Do a foo',
+        parameters: { type: 'object', properties: {} },
       },
     ],
     tokens: 36,
   },
   {
-    messages: [{ role: "user", content: "hello" }],
+    messages: [{ role: 'user', content: 'hello' }],
     functions: [
       {
-        name: "bing_bong",
-        description: "Do a bing bong",
+        name: 'bing_bong',
+        description: 'Do a bing bong',
         parameters: {
-          type: "object",
+          type: 'object',
           properties: {
-            foo: { type: "string" },
+            foo: { type: 'string' },
           },
         },
       },
@@ -184,16 +77,16 @@ const TEST_CASES: Example[] = [
     tokens: 49,
   },
   {
-    messages: [{ role: "user", content: "hello" }],
+    messages: [{ role: 'user', content: 'hello' }],
     functions: [
       {
-        name: "bing_bong",
-        description: "Do a bing bong",
+        name: 'bing_bong',
+        description: 'Do a bing bong',
         parameters: {
-          type: "object",
+          type: 'object',
           properties: {
-            foo: { type: "string" },
-            bar: { type: "number", description: "A number" },
+            foo: { type: 'string' },
+            bar: { type: 'number', description: 'A number' },
           },
         },
       },
@@ -201,19 +94,44 @@ const TEST_CASES: Example[] = [
     tokens: 57,
   },
   {
-    messages: [{ role: "user", content: "hello" }],
+    messages: [{ role: 'user', content: 'hello' }],
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'bing_bong',
+          description: 'Do a bing bong',
+          parameters: {
+            type: 'object',
+            properties: {
+              foo: {
+                type: 'object',
+                properties: {
+                  bar: { type: 'string', enum: ['a', 'b', 'c'] },
+                  baz: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+      },
+    ],
+    tokens: 68,
+  },
+  {
+    messages: [{ role: 'user', content: 'hello' }],
     functions: [
       {
-        name: "bing_bong",
-        description: "Do a bing bong",
+        name: 'bing_bong',
+        description: 'Do a bing bong',
         parameters: {
-          type: "object",
+          type: 'object',
           properties: {
             foo: {
-              type: "object",
+              type: 'object',
               properties: {
-                bar: { type: "string", enum: ["a", "b", "c"] },
-                baz: { type: "boolean" },
+                bar: { type: 'string', enum: ['a', 'b', 'c'] },
+                baz: { type: 'boolean' },
               },
             },
           },
@@ -224,17 +142,17 @@ const TEST_CASES: Example[] = [
   },
   {
     messages: [
-      { role: "user", content: "hello world" },
-      { role: "function", name: "do_stuff", content: `{}` },
+      { role: 'user', content: 'hello world' },
+      { role: 'function', name: 'do_stuff', content: `{}` },
     ],
     tokens: 15,
   },
   {
     messages: [
-      { role: "user", content: "hello world" },
+      { role: 'user', content: 'hello world' },
       {
-        role: "function",
-        name: "do_stuff",
+        role: 'function',
+        name: 'do_stuff',
         content: `{"foo": "bar", "baz": 1.5}`,
       },
     ],
@@ -243,8 +161,8 @@ const TEST_CASES: Example[] = [
   {
     messages: [
       {
-        role: "function",
-        name: "dance_the_tango",
+        role: 'function',
+        name: 'dance_the_tango',
         content: `{"a": { "b" : { "c": false}}}`,
       },
     ],
@@ -253,10 +171,10 @@ const TEST_CASES: Example[] = [
   {
     messages: [
       {
-        role: "assistant",
-        content: "",
+        role: 'assistant',
+        content: '',
         function_call: {
-          name: "do_stuff",
+          name: 'do_stuff',
           arguments: `{"foo": "bar", "baz": 1.5}`,
         },
       },
@@ -264,12 +182,50 @@ const TEST_CASES: Example[] = [
     tokens: 26,
   },
   {
+    validate: false,
     messages: [
       {
-        role: "assistant",
-        content: "",
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+          {
+            id: 'call_2',
+            type: 'function',
+            function: {
+              name: 'get_stock_price',
+              arguments: '{"symbol":"AAPL"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_1',
+      },
+      {
+        role: 'tool',
+        content: 'The current price of AAPL is $150',
+        tool_call_id: 'call_2',
+      },
+    ],
+    tokens: 89,
+  },
+  {
+    messages: [
+      {
+        role: 'assistant',
+        content: '',
         function_call: {
-          name: "do_stuff",
+          name: 'do_stuff',
           arguments: `{"foo":"bar", "baz":\n\n 1.5}`,
         },
       },
@@ -278,369 +234,547 @@ const TEST_CASES: Example[] = [
   },
   {
     messages: [
-      {
-        role: "system",
-        content: "You are an AI assistant trained to foo or bar",
-      },
-      { role: "user", content: "My name is suzie" },
-      {
-        role: "function",
-        name: "foo",
-        content: '{"res":{"kind":"user","name":"suzie"}}',
-      },
-      {
-        role: "user",
-        content: 'I want to post a message with the text "hello world"',
-      },
-      {
-        role: "function",
-        name: "foo",
-        content: '{"res":{"kind":"post","text":"hello world"}}',
-      },
+      { role: 'system', content: 'Hello' },
+      { role: 'user', content: 'Hi there' },
     ],
     functions: [
       {
-        name: "foo",
-        description: "Return the foo or the bar",
-        parameters: {
-          type: "object",
-          properties: {
-            res: {
-              anyOf: [
-                {
-                  type: "object",
-                  properties: {
-                    kind: { type: "string", const: "post" },
-                    text: { type: "string" },
-                  },
-                  required: ["kind", "text"],
-                  additionalProperties: false,
-                },
-                {
-                  type: "object",
-                  properties: {
-                    kind: { type: "string", const: "user" },
-                    name: {
-                      type: "string",
-                      enum: ["jane", "suzie", "adam"],
-                    },
-                  },
-                  required: ["kind", "name"],
-                  additionalProperties: false,
-                },
-              ],
-              description: "The foo or the bar",
-            },
-          },
-          required: ["res"],
-          additionalProperties: false,
-        },
-      },
-    ],
-    function_call: { name: "foo" },
-    tokens: 158,
-  },
-  {
-    messages: [
-      { role: "system", content: "Hello" },
-      { role: "user", content: "Hi there" },
-    ],
-    functions: [
-      {
-        name: "do_stuff",
-        parameters: {
-          type: "object",
-          properties: {
-            foo: {
-              anyOf: [
-                {
-                  type: "object",
-                  properties: {
-                    kind: { type: "string", const: "a" },
-                    baz: { type: "boolean" },
-                  },
-                },
-              ],
-            },
-          },
-        },
-      },
-    ],
-    tokens: 52,
-  },
-  {
-    messages: [
-      { role: "system", content: "Hello" },
-      { role: "user", content: "Hi there" },
-    ],
-    functions: [
-      {
-        name: "do_stuff",
-        parameters: {
-          type: "object",
-          properties: {
-            foo: {
-              anyOf: [
-                {
-                  type: "object",
-                  properties: {
-                    kind: { type: "string", const: "a" },
-                    baz: { type: "boolean" },
-                  },
-                },
-                {
-                  type: "object",
-                  properties: {
-                    kind: { type: "string", const: "b" },
-                    qux: { type: "number" },
-                  },
-                },
-                {
-                  type: "object",
-                  properties: {
-                    kind: { type: "string", const: "c" },
-                    idk: { type: "string" },
-                  },
-                },
-              ],
-            },
-          },
-        },
-      },
-    ],
-    tokens: 80,
-  },
-  {
-    messages: [
-      { role: "system", content: "Hello" },
-      { role: "user", content: "Hi there" },
-    ],
-    functions: [
-      {
-        name: "do_stuff",
-        parameters: {
-          type: "object",
-          properties: {
-            foo: {
-              anyOf: [{ type: "string", const: "a" }, { type: "number" }],
-            },
-          },
-        },
-      },
-    ],
-    tokens: 44,
-  },
-  {
-    messages: [
-      { role: "system", content: "Hello" },
-      { role: "user", content: "Hi there" },
-    ],
-    functions: [
-      {
-        name: "do_stuff",
-        parameters: { type: "object", properties: {} },
+        name: 'do_stuff',
+        parameters: { type: 'object', properties: {} },
       },
     ],
     tokens: 35,
   },
   {
     messages: [
-      { role: "system", content: "Hello:" },
-      { role: "user", content: "Hi there" },
+      { role: 'system', content: 'Hello:' },
+      { role: 'user', content: 'Hi there' },
     ],
     functions: [
-      { name: "do_stuff", parameters: { type: "object", properties: {} } },
+      { name: 'do_stuff', parameters: { type: 'object', properties: {} } },
     ],
     tokens: 35,
   },
   {
     messages: [
-      { role: "system", content: "Hello:" },
-      { role: "system", content: "Hello" },
-      { role: "user", content: "Hi there" },
+      { role: 'system', content: 'Hello:' },
+      { role: 'system', content: 'Hello' },
+      { role: 'user', content: 'Hi there' },
     ],
     functions: [
-      { name: "do_stuff", parameters: { type: "object", properties: {} } },
+      { name: 'do_stuff', parameters: { type: 'object', properties: {} } },
     ],
     tokens: 40,
   },
   {
-    messages: [
-      { role: "system", content: "Hello:" },
-      { role: "system", content: "Hello" },
-      { role: "user", content: "Hi there" },
-    ],
-    functions: [
-      { name: "do_stuff", parameters: { type: "object", properties: {} } },
+    messages: [{ role: 'user', content: 'hello' }],
+    tools: [
       {
-        name: "do_other_stuff",
-        parameters: { type: "object", properties: {} },
-      },
-    ],
-    tokens: 49,
-  },
-  {
-    messages: [
-      { role: "system", content: "Hello:" },
-      { role: "system", content: "Hello" },
-      { role: "user", content: "Hi there" },
-    ],
-    functions: [
-      { name: "do_stuff", parameters: { type: "object", properties: {} } },
-      {
-        name: "do_other_stuff",
-        parameters: { type: "object", properties: {} },
-      },
-    ],
-    function_call: { name: "do_stuff" },
-    tokens: 55,
-  },
-  {
-    messages: [{ role: "user", content: "hello" }],
-    functions: [
-      {
-        name: "get_recipe",
-        parameters: {
-          type: "object",
-          required: ["ingredients", "instructions", "time_to_cook"],
-          properties: {
-            ingredients: {
-              type: "array",
-              items: {
-                type: "object",
-                required: ["name", "unit", "amount"],
-                properties: {
-                  name: {
-                    type: "string",
-                  },
-                  unit: {
-                    enum: ["grams", "ml", "cups", "pieces", "teaspoons"],
-                    type: "string",
-                  },
-                  amount: {
-                    type: "number",
-                  },
-                },
+        type: 'function',
+        function: {
+          name: 'get_current_weather',
+          description: 'Get the current weather in a given location',
+          parameters: {
+            type: 'object',
+            properties: {
+              location: {
+                type: 'string',
+                description: 'The city and state, e.g. San Francisco, CA',
               },
+              unit: { type: 'string', enum: ['celsius', 'fahrenheit'] },
             },
-            instructions: {
-              type: "array",
-              items: {
-                type: "string",
-              },
-              description: "Steps to prepare the recipe (no numbering)",
-            },
-            time_to_cook: {
-              type: "number",
-              description: "Total time to prepare the recipe in minutes",
+            required: ['location'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'bing_bong',
+          description: 'Do a bing bong',
+          parameters: {
+            type: 'object',
+            properties: {
+              foo: { type: 'string' },
+              bar: { type: 'number', description: 'A number' },
             },
           },
         },
       },
     ],
-    tokens: 106,
+    tokens: 108,
   },
-  {
-    messages: [{ role: "user", content: "hello" }],
-    functions: [
-      {
-        name: "function",
-        description: "description",
-        parameters: {
-          type: "object",
-          properties: {
-            quality: {
-              type: "object",
-              properties: {
-                pros: {
-                  type: "array",
-                  items: {
-                    type: "string",
-                  },
-                  description: "Write 3 points why this text is well written",
-                },
-              },
-            },
-          },
-        },
-      },
-    ],
-    tokens: 46,
-  },
-  {
-    messages: [{ role: "user", content: "hello" }],
-    functions: [
-      {
-        name: "function",
-        description: "desctiption1",
-        parameters: {
-          type: "object",
-          description: "desctiption2",
-          properties: {
-            mainField: {
-              type: "string",
-              description: "description3",
-            },
-            "field number one": {
-              type: "object",
-              description: "description4",
-              properties: {
-                yesNoField: {
-                  type: "string",
-                  description: "description5",
-                  enum: ["Yes", "No"],
-                },
-                howIsInteresting: {
-                  type: "string",
-                  description: "description6",
-                },
-                scoreInteresting: {
-                  type: "number",
-                  description: "description7",
-                },
-                isInteresting: {
-                  type: "string",
-                  description: "description8",
-                  enum: ["Yes", "No"],
-                },
-              },
-            },
-          },
-        },
-      },
-    ],
-    tokens: 96,
-  },
-];
+]
 
-const validateAll = false;
-const openAITimeout = 10000;
+const TEST_CASES_TOOL_CALLS: Example[] = [
+  {
+    validate: false,
+    messages: [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '',
+        tool_call_id: 'call_1',
+      },
+    ],
+    tokens: 24,
+  },
+  {
+    validate: false,
+    messages: [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'ggg',
+              arguments: '',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '',
+        tool_call_id: 'call_1',
+      },
+    ],
+    tokens: 17,
+  },
+  {
+    validate: false,
+    messages: [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_1',
+      },
+    ],
+    tokens: 36,
+  },
+  {
+    validate: false,
+    messages: [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'get_totally_different_weather_123',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '',
+        tool_call_id: 'call_1',
+      },
+    ],
+    tokens: 32,
+  },
+  {
+    validate: false,
+    messages: [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'get_totally_different_weather_123',
+              arguments:
+                '{"location":"Boston", "date": "yesterday", "time": "noon"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: 'It is the same as yesterday',
+        tool_call_id: 'call_1',
+      },
+    ],
+    tokens: 51,
+  },
+  {
+    validate: false,
+    messages: [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'get_address',
+              arguments:
+                '{"location":"Paris", "date": "yesterday", "time": "noon"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: 'The address is 123 Main St',
+        tool_call_id: 'call_1',
+      },
+    ],
+    tokens: 42,
+  },
 
-describe.each(TEST_CASES)("token counts (%j)", (example) => {
-  const validateTest = validateAll || example.validate ? test : test.skip;
+  {
+    validate: false,
+    messages: [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'get_weather_for_location',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+          {
+            id: 'call_2',
+            type: 'function',
+            function: {
+              name: 'get_weather_for_location',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_1',
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_2',
+      },
+    ],
+    tokens: 93,
+  },
+  {
+    validate: false,
+    messages: [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'get_breakfast',
+              arguments: '{"meal":"pancakes"}',
+            },
+          },
+          {
+            id: 'call_2',
+            type: 'function',
+            function: {
+              name: 'get_taxi',
+              arguments: '{"destination":"airport"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: 'Your pancakes are ready',
+        tool_call_id: 'call_1',
+      },
+      {
+        role: 'tool',
+        content: 'Your taxi is on the way',
+        tool_call_id: 'call_2',
+      },
+    ],
+    tokens: 78,
+  },
+  {
+    validate: false,
+    messages: [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+          {
+            id: 'call_2',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+          {
+            id: 'call_3',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_1',
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_2',
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_3',
+      },
+    ],
+    tokens: 124,
+  },
+  {
+    validate: false,
+    messages: [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+          {
+            id: 'call_2',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+          {
+            id: 'call_3',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+          {
+            id: 'call_4',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_1',
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_2',
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_3',
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_4',
+      },
+    ],
+    tokens: 157,
+  },
+  {
+    validate: false,
+    messages: [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+          {
+            id: 'call_2',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+          {
+            id: 'call_3',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+          {
+            id: 'call_4',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+          {
+            id: 'call_5',
+            type: 'function',
+            function: {
+              name: 'get_current_weather',
+              arguments: '{"location":"Boston"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_1',
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_2',
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_3',
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_4',
+      },
+      {
+        role: 'tool',
+        content: 'It is currently 70 degrees and sunny in Boston, MA',
+        tool_call_id: 'call_5',
+      },
+    ],
+    tokens: 190,
+  },
+]
+
+const TEST_CASES_WITH_FUNCTIONS = TEST_CASES.filter((t) => t.functions)
+// Transform the test cases to use the new `tools` field
+// This is a bit of a hack, but it's easier than rewriting the tests
+const TRANSFORMED_TEST_CASES = TEST_CASES_WITH_FUNCTIONS.map(
+  (t) =>
+    ({
+      ...t,
+      tools: t.functions?.map((f) => ({ type: 'function', function: f })),
+      functions: undefined,
+    } as Example)
+)
+
+const validateAll = false
+const openAITimeout = 10000
+
+describe.each(
+  TEST_CASES.concat(TRANSFORMED_TEST_CASES).concat(TEST_CASES_TOOL_CALLS)
+)('token counts (%j)', (example) => {
+  const validateTest = validateAll || example.validate ? test : test.skip
   validateTest(
-    "test data matches openai",
+    'test data matches openai',
     async () => {
-      const openai = new OpenAI();
+      const openai = new OpenAI({
+        apiKey: 'REMOVED_API_KEY',
+      })
       const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: 'gpt-3.5-turbo',
         messages: example.messages,
         functions: example.functions as any,
-        function_call: example.function_call,
+        tools: example.tools as any,
         max_tokens: 10,
-      });
-      expect(response.usage?.prompt_tokens).toBe(example.tokens);
-    },
-    openAITimeout,
-  );
+      })
 
-  test("estimate is correct", async () => {
+      expect(response.usage?.prompt_tokens).toBe(example.tokens)
+    },
+    openAITimeout
+  )
+
+  test('estimate is correct', async () => {
     expect(
       promptTokensEstimate({
         messages: example.messages,
         functions: example.functions,
-        function_call: example.function_call,
-      }),
-    ).toBe(example.tokens);
-  });
-});
+        tools: example.tools,
+      })
+    ).toBe(example.tokens)
+  })
+})
