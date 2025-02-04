@@ -304,6 +304,61 @@ const TEST_CASES: Example[] = [
     ],
     tokens: 108,
   },
+  {
+    messages: [
+      { role: 'system', content: 'I want you to act as useful assistant.' },
+      {
+        role: 'user',
+        content:
+          'Tell me a joke about programmers and at the same time find out what is the weather in Prague',
+      },
+    ],
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'generate_theme_joke',
+          description: 'Generate a joke based on a given theme',
+          parameters: {
+            type: 'object',
+            required: ['theme'],
+            properties: {
+              theme: {
+                type: 'string',
+                description:
+                  "The theme for the joke, e.g. 'animals', 'space', 'sports', etc.",
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_weather',
+          description:
+            'Get the current weather in a given location in Celsius degrees',
+          parameters: {
+            type: 'object',
+            required: ['location'],
+            properties: {
+              unit: {
+                enum: ['celsius', 'fahrenheit'],
+                type: 'string',
+                default: 'celsius',
+              },
+              location: {
+                type: 'string',
+                description: 'The city and state, e.g. San Francisco, CA',
+              },
+            },
+          },
+        },
+      },
+    ],
+    tokens: 159,
+    validate: true,
+  },
 ]
 
 const TEST_CASES_TOOL_CALLS: Example[] = [
@@ -755,13 +810,19 @@ describe.each(
       const openai = new OpenAI({
         apiKey: 'REMOVED_API_KEY',
       })
+
       const response = await openai.chat.completions.create({
         model: 'gpt-3.5-turbo',
         messages: example.messages,
-        functions: example.functions as any,
+        //functions: example.functions as any,
         tools: example.tools as any,
-        max_tokens: 10,
+        max_tokens: 200,
       })
+
+      console.log(
+        'response.usage?.prompt_tokens',
+        response.usage?.prompt_tokens
+      )
 
       expect(response.usage?.prompt_tokens).toBe(example.tokens)
     },
